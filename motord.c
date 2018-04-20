@@ -151,7 +151,7 @@ int main(int argc, char *argv[]) {
 		case -1:
 			error(2, "Error forking");
 		case  0:
-	    execl("./wmdemo.py", NULL);
+	    execl("./wiimoted.py", NULL);
             perror("Error running bluetooth listener\n");
             exit(1);
 	}
