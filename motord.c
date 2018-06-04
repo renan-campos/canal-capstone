@@ -48,6 +48,9 @@
 // Node Controller port
 #define NC_PORT 2018
 
+// PID of forked wiimote listener
+int wpid;
+
 // message queue variable
 // This is global because it will be read by multiple threads.
 int msqid;
@@ -105,7 +108,7 @@ int main(int argc, char *argv[]) {
 	sigset_t all_signals;
 	struct sigaction new_act;
 	int nsigs;
-	int sigs[] = { SIGTERM, SIGBUS, SIGSEGV, SIGFPE };
+	int sigs[] = { SIGINT, SIGTERM, SIGBUS, SIGSEGV, SIGFPE };
 
 	// Thread variables
 	pthread_t handlr_id, snd_id, rcv_id;
@@ -147,15 +150,15 @@ int main(int argc, char *argv[]) {
 	}
 
 	// Fork bluetooth wiimote process
-	switch( fork() ) {
+	wpid = fork();
+	switch( wpid ) {
 		case -1:
 			error(2, "Error forking");
 		case  0:
-	    execl("./wiimoted.py", NULL);
-            perror("Error running bluetooth listener\n");
-            exit(1);
+			execl("./wiimoted.py", NULL);
+			perror("Error running bluetooth listener\n");
+			exit(1);
 	}
-	
 	// Wait for message handler to exit (should never happen)
 	pthread_join(handlr_id, NULL);
 
@@ -169,7 +172,15 @@ int main(int argc, char *argv[]) {
 }
 
 void sig_handler(int sig) {
-	// TODO handle closing signals and properly free resources.
+	if( kill(wpid, SIGKILL) != 0)
+		perror("Error killing wiimote listener process");
+
+	// Deleting message queue
+	if (msgctl(msqid, IPC_RMID, NULL) == -1) {
+		fprintf(stderr, "Message queue could not be deleted.\n");
+		exit(1);
+	}
+	exit(0);
 }
 
 void *sig_waiter(void *arg) {

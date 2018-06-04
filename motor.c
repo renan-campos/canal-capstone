@@ -15,8 +15,7 @@ void *msg_handler(void *arg) {
 	for (;;) {
 		if (msgrcv(msqid, &m, sizeof(MSG), TO_HNDLR, 0) == -1) {
 			perror("Handler");
-			fprintf(stderr, "HANDLER:Error on message queue\n");
-			continue;
+			return;
 		}
 
 		printf("Received message %d\n", (int) m.msg);
