@@ -45,9 +45,6 @@
 
 #define M_ID    2013
 
-// Node Controller port
-#define NC_PORT 2018
-
 // PID of forked wiimote listener
 int wpid;
 
@@ -138,7 +135,7 @@ int main(int argc, char *argv[]) {
 	// 1. Local processes (bluetooth remote) that wants to send message to handler
 	// 2. The receiver thread to the message handler thread
 	// 3. The handler thread to sender thread
-	if ((msqid = msgget(M_ID, (IPC_CREAT | 0600))) == -1) {
+	if ((msqid = msgget(M_ID, (IPC_CREAT | 0666))) == -1) {
 		perror("msgget failed :\n");
 		exit(1);
 	}
@@ -159,6 +156,55 @@ int main(int argc, char *argv[]) {
 			perror("Error running bluetooth listener\n");
 			exit(1);
 	}
+
+	// Setting up socket
+	if ((sockfd_l = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+		error(1, "Error on socket creation\n");
+
+	// Set up host address
+	bzero((char*) &host_addr, sizeof(host_addr));
+	host_addr.sin_family      = AF_INET;
+	host_addr.sin_addr.s_addr = INADDR_ANY;
+	host_addr.sin_port        = htons(NC_PORT);
+
+	if (bind(sockfd_l, (struct sockaddr *) &host_addr, sizeof(host_addr)) < 0)
+		error(2, "Error on bind\n");
+	
+	// Setting socket to listen mode, with a backlog queue of five (max).
+	listen(sockfd_l, 5);
+
+	snd_id = 0;
+	rcv_id = 0;
+	while(1) {
+
+		if ((newsockfd = accept(sockfd_l, NULL, NULL)) < 0)
+			error(2, "Error on accept.\n");
+			
+		printf("new connection made\n");
+		
+		if (snd_id != 0 && rcv_id != 0) {
+			pthread_cancel(snd_id);
+			pthread_join(snd_id, NULL);
+		}
+		if (rcv_id != 0) {
+			pthread_cancel(rcv_id);
+			pthread_join(rcv_id, NULL);
+		}
+
+		// Start receiver thread.
+		if (pthread_create(&snd_id, NULL, receiver_thread, (void *) &newsockfd) != 0) {
+			perror("Error on thread creation\n");
+			exit(1);
+		}	
+		
+		// Start sender thread.
+		if (pthread_create(&rcv_id, NULL, sender_thread, (void *) &newsockfd) != 0) {
+			perror("Error on thread creation\n");
+			exit(1);
+		}
+		
+	}
+
 	// Wait for message handler to exit (should never happen)
 	pthread_join(handlr_id, NULL);
 
@@ -186,4 +232,58 @@ void sig_handler(int sig) {
 void *sig_waiter(void *arg) {
 	while (1)
 		pause();
+}
+
+void *receiver_thread(void *arg) {
+	// Receiver gets message from socket and places it in the message queue. 
+	int sockfd = *((int *) arg);
+	int i;
+	MSG inmsg;
+
+	for (;;) {
+		// Read messages from socket.
+		// Each message has a header that tells the number of bytes in the actual message.
+		if ((i = read(sockfd, &inmsg.msg, 1)) == -1) {
+			perror("Error on socket read");
+			return NULL;
+		}
+
+		if (i == 0)
+			return NULL;
+		
+		// Place message on message queue for handler to process.
+		inmsg.mtype = TO_HNDLR;
+
+		if (msgsnd(msqid, &inmsg, sizeof(MSG)-sizeof(long), 0) == -1) {
+			perror("Error in message queue");
+			sig_handler(-1);
+		}
+	}
+	return NULL;
+}
+
+void *sender_thread(void *arg) {
+	// Sender thread listens to the message queue, and then writes its message to socket.
+	int sockfd = *((int *) arg);
+	MSG omsg;
+
+	for (;;) {
+		// Blocks until a message for sending is received from the queue
+		// First a message stating what type of process is going to send a request is received,
+		// Then the actual message will be given. 
+		if (msgrcv(msqid, &omsg, sizeof(MSG), TO_SNDR, 0) == -1) {
+			perror("Error on message queue receive");
+			return NULL;
+		}
+
+
+		if (write(sockfd, &omsg.msg, 1) == -1) {
+			perror("Error on socket write");
+			return NULL;
+		}
+
+		if (omsg.msg == DISCONNECT)
+			return NULL;
+	}
+	return NULL;
 }

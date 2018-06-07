@@ -6,8 +6,9 @@
 
 void *msg_handler(void *arg) {
 	int msqid = *((int *) arg);
-	MSG m;
+	MSG m, omsg;
 	char remote = 0; 
+	char state = STOPPED;
 
 	printf("Message handler started\n");
 	fflush(stdout);
@@ -26,9 +27,46 @@ void *msg_handler(void *arg) {
 		// Sent from sender
 			printf("Message from auto-pilot\n");
 			m.msg -= 20;
-			// Ignore message from sender (other than STATE) if remote is on
-			if (remote && m.msg != STATE)
+			switch(m.msg) {
+			case STATE:
+				printf("STATE received.\n");
+				omsg.mtype = TO_SNDR;
+				omsg.msg   = state;
+				if (msgsnd(msqid, &omsg, sizeof(MSG)-sizeof(long), 0) == -1) {
+					perror("Error in message queue");
+					return;
+				}
 				continue;
+			case CONNECT:
+				printf("AI CONNECT received.\n");
+				omsg.mtype = TO_SNDR;
+				omsg.msg   = SUCCESS;
+				if (msgsnd(msqid, &omsg, sizeof(MSG)-sizeof(long), 0) == -1) {
+					perror("Error in message queue");
+					return;
+				}
+				continue;
+			case DISCONNECT:
+				printf("AI DISCONNECT received.\n");
+				omsg.mtype = TO_SNDR;
+				omsg.msg   = DISCONNECT;
+				if (msgsnd(msqid, &omsg, sizeof(MSG)-sizeof(long), 0) == -1) {
+					perror("Error in message queue");
+					return;
+				}
+				continue;
+			}
+			// Ignore message from sender (other than STATE) if remote is on
+			if (remote) {
+				printf("REMOTE connnected %d\n", remote);
+				omsg.mtype = TO_SNDR;
+				omsg.msg   = CONNECT;
+				if (msgsnd(msqid, &omsg, sizeof(MSG)-sizeof(long), 0) == -1) {
+					perror("Error in message queue");
+					return;
+				}
+				continue;
+			}
 		}
 		else if (m.msg >= 10) {
 		// Sent from remote 
@@ -42,19 +80,64 @@ void *msg_handler(void *arg) {
 
 		switch(m.msg) {
 		case STOPPED:
+			state = STOPPED;
 			printf("STOPPED received.\n");
+			if (!remote) {
+				omsg.mtype = TO_SNDR;
+				omsg.msg   = SUCCESS;
+				if (msgsnd(msqid, &omsg, sizeof(MSG)-sizeof(long), 0) == -1) {
+					perror("Error in message queue");
+					return;
+				}
+			}
 			break;
 		case FORWARD:
+			state = FORWARD;
 			printf("FORWARD received.\n");
+			if (!remote) {
+				omsg.mtype = TO_SNDR;
+				omsg.msg   = SUCCESS;
+				if (msgsnd(msqid, &omsg, sizeof(MSG)-sizeof(long), 0) == -1) {
+					perror("Error in message queue");
+					return;
+				}
+			}
 			break;
 		case BACK:
+			state = BACK;
 			printf("BACK received.\n");
+			if (!remote) {
+				omsg.mtype = TO_SNDR;
+				omsg.msg   = SUCCESS;
+				if (msgsnd(msqid, &omsg, sizeof(MSG)-sizeof(long), 0) == -1) {
+					perror("Error in message queue");
+					return;
+				}
+			}
 			break;
 		case RIGHT:
+			state = RIGHT;
 			printf("RIGHT received.\n");
+			if (!remote) {
+				omsg.mtype = TO_SNDR;
+				omsg.msg   = SUCCESS;
+				if (msgsnd(msqid, &omsg, sizeof(MSG)-sizeof(long), 0) == -1) {
+					perror("Error in message queue");
+					return;
+				}
+			}
 			break;
 		case LEFT:
+			state = LEFT;
 			printf("LEFT received.\n");
+			if (!remote) {
+				omsg.mtype = TO_SNDR;
+				omsg.msg   = SUCCESS;
+				if (msgsnd(msqid, &omsg, sizeof(MSG)-sizeof(long), 0) == -1) {
+					perror("Error in message queue");
+					return;
+				}
+			}
 			break;
 		case STATE:
 			printf("STATE received.\n");

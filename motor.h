@@ -42,4 +42,7 @@ typedef struct MSG {
 // Listens to the message queue and handles messages.
 void *msg_handler(void *arg);
 
+// Node Controller port
+#define NC_PORT 2018
+
 #endif
