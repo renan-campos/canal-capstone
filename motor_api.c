@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <strings.h>
+#include <unistd.h>
 
 
 char motor_connect(MOTOR *motor, char *addr) {
@@ -12,8 +13,10 @@ char motor_connect(MOTOR *motor, char *addr) {
 	struct sockaddr_in serv_addr;
 
 	// Creating new socket for connection
-	if ((*motor = socket(AF_INET, SOCK_STREAM, 0)) == -1)
-		error(2, "Error on socket creation\n");
+	if ((*motor = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+		perror("Error on socket creation");
+		return FAIL;
+	}
 	
 	// Getting host information in order to connect.
 	server = gethostbyname(addr);

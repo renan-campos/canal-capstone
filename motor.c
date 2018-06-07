@@ -1,6 +1,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/msg.h>
+#include <unistd.h>
+#include <pigpio.h>
+
+
+#define HBRIDGE_R_F 17
+#define HBRIDGE_R_B 27
+ 
+#define HBRIDGE_L_F 23
+#define HBRIDGE_L_B 24
+// NOTE: DONT EVER TURN BOTH FORWARD AND BACK AT THE SAME TIME!
 
 #include "motor.h"
 
@@ -13,10 +23,22 @@ void *msg_handler(void *arg) {
 	printf("Message handler started\n");
 	fflush(stdout);
 
+         if (gpioInitialise() < 0) return 0;
+ 
+ 	gpioSetMode(HBRIDGE_L_F, PI_OUTPUT);
+ 	gpioSetMode(HBRIDGE_L_B, PI_OUTPUT);
+ 	gpioSetMode(HBRIDGE_R_F, PI_OUTPUT);
+ 	gpioSetMode(HBRIDGE_R_B, PI_OUTPUT);
+ 	
+ 	gpioWrite(HBRIDGE_L_F, 0);
+ 	gpioWrite(HBRIDGE_L_B, 0);
+ 	gpioWrite(HBRIDGE_R_F, 0);
+ 	gpioWrite(HBRIDGE_R_B, 0);
+
 	for (;;) {
 		if (msgrcv(msqid, &m, sizeof(MSG), TO_HNDLR, 0) == -1) {
 			perror("Handler");
-			return;
+			return NULL;
 		}
 
 		printf("Received message %d\n", (int) m.msg);
@@ -34,7 +56,7 @@ void *msg_handler(void *arg) {
 				omsg.msg   = state;
 				if (msgsnd(msqid, &omsg, sizeof(MSG)-sizeof(long), 0) == -1) {
 					perror("Error in message queue");
-					return;
+					return NULL;
 				}
 				continue;
 			case CONNECT:
@@ -43,7 +65,7 @@ void *msg_handler(void *arg) {
 				omsg.msg   = SUCCESS;
 				if (msgsnd(msqid, &omsg, sizeof(MSG)-sizeof(long), 0) == -1) {
 					perror("Error in message queue");
-					return;
+					return NULL;
 				}
 				continue;
 			case DISCONNECT:
@@ -52,7 +74,7 @@ void *msg_handler(void *arg) {
 				omsg.msg   = DISCONNECT;
 				if (msgsnd(msqid, &omsg, sizeof(MSG)-sizeof(long), 0) == -1) {
 					perror("Error in message queue");
-					return;
+					return NULL;
 				}
 				continue;
 			}
@@ -63,7 +85,7 @@ void *msg_handler(void *arg) {
 				omsg.msg   = CONNECT;
 				if (msgsnd(msqid, &omsg, sizeof(MSG)-sizeof(long), 0) == -1) {
 					perror("Error in message queue");
-					return;
+					return NULL;
 				}
 				continue;
 			}
@@ -82,60 +104,98 @@ void *msg_handler(void *arg) {
 		case STOPPED:
 			state = STOPPED;
 			printf("STOPPED received.\n");
+ 			
+ 		        gpioHardwarePWM(18, 500, 990000);
+ 			
+ 			gpioWrite(HBRIDGE_L_F, 0);
+ 			gpioWrite(HBRIDGE_L_B, 0);
+ 			gpioWrite(HBRIDGE_R_F, 0);
+ 			gpioWrite(HBRIDGE_R_B, 0);
+ 
+ 			// Sleep 1 seconds to make sure motor current dissapated.
+ 			sleep(1);
 			if (!remote) {
 				omsg.mtype = TO_SNDR;
 				omsg.msg   = SUCCESS;
 				if (msgsnd(msqid, &omsg, sizeof(MSG)-sizeof(long), 0) == -1) {
 					perror("Error in message queue");
-					return;
+					return NULL;
 				}
 			}
 			break;
 		case FORWARD:
 			state = FORWARD;
 			printf("FORWARD received.\n");
+ 		        
+ 			gpioHardwarePWM(18, 500, 250000);
+ 			
+ 			gpioWrite(HBRIDGE_L_F, 1);
+ 			gpioWrite(HBRIDGE_L_B, 0);
+ 			gpioWrite(HBRIDGE_R_F, 1);
+ 			gpioWrite(HBRIDGE_R_B, 0);
 			if (!remote) {
 				omsg.mtype = TO_SNDR;
 				omsg.msg   = SUCCESS;
 				if (msgsnd(msqid, &omsg, sizeof(MSG)-sizeof(long), 0) == -1) {
 					perror("Error in message queue");
-					return;
+					return NULL;
 				}
 			}
 			break;
 		case BACK:
 			state = BACK;
 			printf("BACK received.\n");
+ 		        
+ 			gpioHardwarePWM(18, 500, 990000);
+ 
+ 			gpioWrite(HBRIDGE_L_F, 0);
+ 			gpioWrite(HBRIDGE_L_B, 1);
+ 			gpioWrite(HBRIDGE_R_F, 0);
+ 			gpioWrite(HBRIDGE_R_B, 1);
 			if (!remote) {
 				omsg.mtype = TO_SNDR;
 				omsg.msg   = SUCCESS;
 				if (msgsnd(msqid, &omsg, sizeof(MSG)-sizeof(long), 0) == -1) {
 					perror("Error in message queue");
-					return;
+					return NULL;
 				}
 			}
 			break;
 		case RIGHT:
 			state = RIGHT;
 			printf("RIGHT received.\n");
+ 			
+ 			gpioHardwarePWM(18, 500, 250000);
+ 
+ 			gpioWrite(HBRIDGE_L_F, 0);
+ 			gpioWrite(HBRIDGE_L_B, 0);
+ 			gpioWrite(HBRIDGE_R_F, 1);
+ 			gpioWrite(HBRIDGE_R_B, 0);
 			if (!remote) {
 				omsg.mtype = TO_SNDR;
 				omsg.msg   = SUCCESS;
 				if (msgsnd(msqid, &omsg, sizeof(MSG)-sizeof(long), 0) == -1) {
 					perror("Error in message queue");
-					return;
+					return NULL;
 				}
 			}
 			break;
 		case LEFT:
 			state = LEFT;
 			printf("LEFT received.\n");
+ 			
+ 			gpioHardwarePWM(18, 500, 250000);
+ 
+ 			gpioWrite(HBRIDGE_L_F, 1);
+ 			gpioWrite(HBRIDGE_L_B, 0);
+ 			gpioWrite(HBRIDGE_R_F, 0);
+ 			gpioWrite(HBRIDGE_R_B, 0);
 			if (!remote) {
 				omsg.mtype = TO_SNDR;
 				omsg.msg   = SUCCESS;
 				if (msgsnd(msqid, &omsg, sizeof(MSG)-sizeof(long), 0) == -1) {
 					perror("Error in message queue");
-					return;
+					return NULL;
 				}
 			}
 			break;
@@ -152,5 +212,6 @@ void *msg_handler(void *arg) {
 			break;
 		}
 	}
+ 	gpioTerminate();
 	return NULL;
 }

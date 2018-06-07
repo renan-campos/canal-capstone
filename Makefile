@@ -1,7 +1,7 @@
 all: motord example_cli
 
 motord: motord.c motor.o
-	gcc -o motord motord.c motor.o -lpthread
+	gcc -o motord motord.c motor.o -lpthread -lpigpio
 
 example_cli: example_cli.c motor_api.o
 	gcc -o example_cli example_cli.c motor_api.o
